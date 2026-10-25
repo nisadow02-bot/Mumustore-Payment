@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ป้ายชำระเงิน Mumu Store</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Prompt & Kanit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#fff1f2',
+                            100: '#ffe4e6',
+                            200: '#fecdd3',
+                            300: '#fda4af',
+                            400: '#fb7185',
+                            500: '#f43f5e',
+                            600: '#e11d48',
+                            700: '#be123c',
+                            800: '#9f1239',
+                            900: '#881337',
+                            vivid: '#ff1e42'
+                        }
+                    },
+                    fontFamily: {
+                        prompt: ['Prompt', 'sans-serif'],
+                        kanit: ['Kanit', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Prompt', sans-serif;
+            background: linear-gradient(135deg, #ff1e42 0%, #e11d48 40%, #9f1239 100%);
+            min-height: 100vh;
+            color: #333;
+            overflow-x: hidden;
+        }
+
+        /* Canvas background overlay */
+        #tulip-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* Glassmorphism styling */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.93);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            box-shadow: 0 20px 40px rgba(136, 19, 55, 0.35);
+        }
+
+        /* Glowing animation */
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(255, 255, 255, 0.6), 0 0 40px rgba(255, 30, 66, 0.4); }
+            50% { box-shadow: 0 0 30px rgba(255, 255, 255, 0.9), 0 0 60px rgba(255, 30, 66, 0.7); }
+        }
+
+        .glow-effect {
+            animation: pulse-glow 3s infinite ease-in-out;
+        }
+
+        /* Animated Music Equalizer Bars */
+        .eq-bar {
+            width: 3px;
+            background-color: #fecdd3;
+            border-radius: 3px;
+            animation: eqPulse 1.2s ease-in-out infinite alternate;
+        }
+        .eq-bar:nth-child(1) { height: 6px; animation-delay: 0.1s; }
+        .eq-bar:nth-child(2) { height: 16px; animation-delay: 0.3s; }
+        .eq-bar:nth-child(3) { height: 10px; animation-delay: 0.2s; }
+        .eq-bar:nth-child(4) { height: 14px; animation-delay: 0.4s; }
+
+        .is-paused .eq-bar {
+            animation: none !important;
+            height: 4px !important;
+            background-color: #fda4af !important;
+        }
+
+        @keyframes eqPulse {
+            0% { height: 4px; }
+            100% { height: 18px; }
+        }
+
+        /* Scrolling marquee for music title */
+        .marquee-container {
+            overflow: hidden;
+            white-space: nowrap;
+        }
+        .marquee-text {
+            display: inline-block;
+            animation: marquee 10s linear infinite;
+        }
+        @keyframes marquee {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(-100%); }
+        }
+
+        /* Custom Toast notification */
+        #toast {
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            transform: translateY(100px);
+            opacity: 0;
+        }
+        #toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-start min-h-screen p-4 sm:p-6 md:p-8 relative selection:bg-rose-200 selection:text-rose-900">
+
+    <!-- Canvas for Floating Tulip Petals -->
+    <canvas id="tulip-canvas"></canvas>
+
+    <!-- Hidden YouTube iFrame Container -->
+    <div class="hidden">
+        <div id="youtube-player"></div>
+    </div>
+
+    <!-- Floating Music Player Control Bar -->
+    <div id="music-player-bar" class="fixed top-4 right-4 sm:right-6 z-50 flex items-center gap-2 bg-rose-950/85 hover:bg-rose-900 text-white px-3.5 py-2 rounded-full shadow-xl border border-rose-300/30 backdrop-blur-md transition-all active:scale-98 max-w-[90vw] sm:max-w-xs">
+        
+        <!-- Equalizer Visualizer Icon -->
+        <div id="music-eq" class="flex items-center gap-0.5 h-5 w-4 justify-center is-paused shrink-0">
+            <div class="eq-bar"></div>
+            <div class="eq-bar"></div>
+            <div class="eq-bar"></div>
+            <div class="eq-bar"></div>
+        </div>
+
+        <!-- Song Info & Title -->
+        <div class="flex flex-col min-w-0 pr-1">
+            <div class="flex items-center gap-1 text-[10px] text-rose-300 font-medium">
+                <i class="fa-solid fa-music text-[9px]"></i>
+                <span>เปิดเพลงร้านอยู่ 🎵</span>
+            </div>
+            <div class="marquee-container w-28 sm:w-36">
+                <p id="song-title-display" class="marquee-text text-xs font-semibold text-rose-50">ใจเจ้าเอ๋ย - MABELZ PiXXiE</p>
+            </div>
+        </div>
+
+        <!-- Play / Pause Button -->
+        <button id="play-pause-btn" onclick="togglePlayMusic()" title="เล่น/หยุดเพลง" class="w-8 h-8 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center shrink-0 shadow transition-transform active:scale-90">
+            <i id="play-icon" class="fa-solid fa-play text-xs ml-0.5"></i>
+        </button>
+
+        <!-- Mute / Unmute Button -->
+        <button id="mute-btn" onclick="toggleMuteMusic()" title="ปิด/เปิดเสียง" class="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-rose-200 flex items-center justify-center shrink-0 transition-colors">
+            <i id="mute-icon" class="fa-solid fa-volume-high text-xs"></i>
+        </button>
+    </div>
+
+    <!-- Main Container -->
+    <main class="w-full max-w-lg z-10 my-auto py-4">
+        
+        <!-- Main Card Wrapper -->
+        <div class="glass-card rounded-3xl p-5 sm:p-7 relative overflow-hidden transition-all duration-300">
+            
+            <!-- Top Ribbon & Store Banner Header -->
+            <div class="relative text-center mb-6">
+                <!-- Background decorative elements -->
+                <div class="absolute -top-10 -left-10 w-28 h-28 bg-rose-400/20 rounded-full blur-2xl pointer-events-none"></div>
+                <div class="absolute -top-10 -right-10 w-28 h-28 bg-red-500/20 rounded-full blur-2xl pointer-events-none"></div>
+
+                <div class="inline-flex items-center gap-2 bg-gradient-to-r from-rose-600 via-brand-vivid to-red-600 text-white px-6 py-2.5 rounded-full shadow-md mb-3 border border-rose-300/40 glow-effect">
+                    <span class="text-lg">🌷</span>
+                    <h1 class="font-kanit text-2xl sm:text-3xl font-bold tracking-wide text-white drop-shadow-md">Mumu Store</h1>
+                    <span class="text-lg">🌷</span>
+                </div>
+                <p class="text-xs sm:text-sm text-rose-700 font-medium tracking-wide">✨ ป้ายบัญชีชำระเงินสำหรับลูกค้า ✨</p>
+            </div>
+
+            <!-- Image / QR Code Display Section -->
+            <div class="mb-6 flex flex-col items-center">
+                <div class="relative group">
+                    <div class="w-48 h-48 sm:w-56 sm:h-56 bg-rose-50 border-4 border-rose-300/80 rounded-2xl overflow-hidden shadow-inner flex items-center justify-center relative">
+                        <!-- Displayed Image -->
+                        <img id="qr-image" src="https://placehold.co/400x400/fff0f2/e11d48?text=QR+PromptPay%0AMumu+Store" alt="QR Code / ป้ายบัญชี" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105">
+                        
+                        <!-- Overlay upload icon trigger -->
+                        <label for="image-upload-input" class="absolute inset-0 bg-black/40 text-white flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer backdrop-blur-xs">
+                            <i class="fa-solid fa-camera text-2xl mb-1"></i>
+                            <span class="text-xs font-medium">เปลี่ยนรูปภาพ/QR</span>
+                        </label>
+                    </div>
+
+                    <!-- Hidden File Input -->
+                    <input type="file" id="image-upload-input" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
+                </div>
+                <div class="mt-2 flex items-center gap-2">
+                    <label for="image-upload-input" class="text-xs text-rose-600 hover:text-rose-800 font-medium underline cursor-pointer flex items-center gap-1">
+                        <i class="fa-solid fa-arrow-up-from-bracket"></i> อัปโหลดรูปป้าย/สแกน QR ใหม่
+                    </label>
+                    <span class="text-rose-300">|</span>
+                    <button onclick="resetImage()" class="text-xs text-rose-400 hover:text-rose-600 font-medium">รีเซ็ต</button>
+                </div>
+            </div>
+
+            <!-- Payment Methods Container -->
+            <div class="space-y-4">
+                
+                <!-- 1. Bank Account Card (Kasikorn Bank default style) -->
+                <div class="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200/80 rounded-2xl p-4 shadow-sm relative overflow-hidden transition-all hover:shadow-md">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-9 h-9 bg-emerald-600 text-white rounded-xl flex items-center justify-center font-bold text-sm shadow-sm">
+                                <i class="fa-solid fa-building-columns"></i>
+                            </div>
+                            <div>
+                                <span class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">ธนาคารกสิกรไทย</span>
+                                <h3 class="text-sm font-semibold text-gray-800">ธนาคาร (Bank Account)</h3>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-3 bg-white/80 p-3 rounded-xl border border-emerald-100/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                            <p class="text-xs text-gray-500">ชื่อบัญชี</p>
+                            <p class="text-sm font-semibold text-gray-800" id="bank-name">บจก. มูมู่ สโตร์ (Mumu Store)</p>
+                            <p class="text-xs text-gray-500 mt-1">เลขที่บัญชี</p>
+                            <p class="text-base font-bold text-emerald-700 tracking-wider font-mono" id="bank-number">210-1-56020-4</p>
+                        </div>
+                        <button onclick="copyToClipboard('2101560204', 'เลขบัญชีธนาคาร')" class="self-start sm:self-center bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-medium px-4 py-2 rounded-xl shadow transition-all flex items-center gap-1.5 shrink-0">
+                            <i class="fa-regular fa-copy"></i>
+                            <span>คัดลอกเลขบัญชี</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 2. TrueMoney Wallet Card -->
+                <div class="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200/80 rounded-2xl p-4 shadow-sm relative overflow-hidden transition-all hover:shadow-md">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-9 h-9 bg-gradient-to-br from-orange-500 to-amber-500 text-white rounded-xl flex items-center justify-center font-bold text-sm shadow-sm">
+                                <i class="fa-solid fa-wallet"></i>
+                            </div>
+                            <div>
+                                <span class="bg-orange-100 text-orange-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">TrueMoney Wallet</span>
+                                <h3 class="text-sm font-semibold text-gray-800">ทรูวอลเล็ท (True Wallet)</h3>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-3 bg-white/80 p-3 rounded-xl border border-orange-100/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                            <p class="text-xs text-gray-500">ชื่อบัญชี วอลเล็ท</p>
+                            <p class="text-sm font-semibold text-gray-800" id="wallet-name">ชรินพัชร เพชรสวน</p>
+                            <p class="text-xs text-gray-500 mt-1">เบอร์ True Wallet</p>
+                            <p class="text-base font-bold text-orange-600 tracking-wider font-mono" id="wallet-number">098-982-8417</p>
+                        </div>
+                        <button onclick="copyToClipboard('0989828417', 'เบอร์ True Wallet')" class="self-start sm:self-center bg-orange-500 hover:bg-orange-600 active:scale-95 text-white text-xs font-medium px-4 py-2 rounded-xl shadow transition-all flex items-center gap-1.5 shrink-0">
+                            <i class="fa-regular fa-copy"></i>
+                            <span>คัดลอก True Wallet</span>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Bottom Additional Info & Slip Note Section -->
+            <div class="mt-5 bg-rose-50/80 border border-rose-200/90 rounded-2xl p-4">
+                <div class="flex items-center gap-2 mb-2 text-rose-800 font-semibold text-xs sm:text-sm">
+                    <i class="fa-solid fa-circle-info text-rose-500"></i>
+                    <span>หมายเหตุ / โน๊ตแจ้งโอนเงิน</span>
+                </div>
+                
+                <div class="bg-white rounded-xl p-3 border border-rose-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shadow-xs">
+                    <div class="text-xs text-gray-700 leading-relaxed">
+                        <span class="text-rose-600 font-bold">⚠️ ระบุโน๊ตสลิป:</span> 
+                        <span id="slip-note-text" class="font-medium text-gray-800">ซื้อขาย @mumu</span>
+                    </div>
+                    
+                    <button onclick="copyToClipboard('ซื้อขาย @mumu', 'โน๊ตสลิป')" class="self-end sm:self-center bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-xs font-medium px-3.5 py-1.5 rounded-lg shadow-xs transition-all flex items-center gap-1 shrink-0">
+                        <i class="fa-regular fa-copy"></i>
+                        <span>คัดลอกโน๊ต</span>
+                    </button>
+                </div>
+
+                <p class="text-[11px] text-center text-rose-500 mt-3 font-light">
+                    💕 เมื่อโอนเงินเรียบร้อยแล้ว กรุณาส่งสลิปยืนยันทางแชทได้เลยนะคะ 💕
+                </p>
+            </div>
+
+            <!-- Footer Badge -->
+            <div class="mt-5 text-center">
+                <span class="text-[10px] text-rose-600/70 font-medium tracking-wide">© Mumu Store - Official Payment Details</span>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Copy Toast Notification Popup -->
+    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900/90 backdrop-blur-md text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border border-gray-700 text-xs sm:text-sm">
+        <div class="w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center text-white text-xs">
+            <i class="fa-solid fa-check"></i>
+        </div>
+        <div>
+            <p id="toast-title" class="font-semibold text-emerald-400">คัดลอกเรียบร้อยแล้ว!</p>
+            <p id="toast-msg" class="text-gray-300 text-[11px]">บันทึกข้อมูลไปยังคลิปบอร์ดแล้ว</p>
+        </div>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // --- 1. COPY TO CLIPBOARD & TOAST SYSTEM ---
+        function copyToClipboard(text, label) {
+            const tempInput = document.createElement('textarea');
+            tempInput.value = text;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            
+            try {
+                document.execCommand('copy');
+                showToast(`คัดลอก${label}เรียบร้อยแล้ว!`, text);
+            } catch (err) {
+                console.error('Copy failed:', err);
+                showToast('คัดลอกไม่สำเร็จ', 'กรุณาลองใหม่อีกครั้ง');
+            }
+            document.body.removeChild(tempInput);
+        }
+
+        let toastTimer;
+        function showToast(title, detail) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-title').innerText = title;
+            document.getElementById('toast-msg').innerText = detail;
+
+            toast.classList.add('show');
+
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2500);
+        }
+
+        // --- 2. IMAGE UPLOAD & PREVIEW ---
+        const defaultQR = "https://placehold.co/400x400/fff0f2/e11d48?text=QR+PromptPay%0AMumu+Store";
+        
+        function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('qr-image').src = e.target.result;
+                    showToast("เปลี่ยนรูปภาพสำเร็จ!", file.name);
+                }
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function resetImage() {
+            document.getElementById('qr-image').src = defaultQR;
+            document.getElementById('image-upload-input').value = "";
+            showToast("รีเซ็ตรูปภาพแล้ว", "ใช้งานรูปภาพเริ่มต้น");
+        }
+
+        // --- 3. ANIMATED TULIP PETALS PARTICLES CANVAS ---
+        const canvas = document.getElementById('tulip-canvas');
+        const ctx = canvas.getContext('2d');
+
+        let width = canvas.width = window.innerWidth;
+        let height = canvas.height = window.innerHeight;
+
+        window.addEventListener('resize', () => {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        });
+
+        class TulipParticle {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.x = Math.random() * width;
+                this.y = -20 - Math.random() * 40;
+                this.size = Math.random() * 12 + 8;
+                this.speedY = Math.random() * 1.2 + 0.6;
+                this.speedX = Math.random() * 0.8 - 0.4;
+                this.rotation = Math.random() * Math.PI * 2;
+                this.rotationSpeed = (Math.random() - 0.5) * 0.02;
+                this.opacity = Math.random() * 0.6 + 0.3;
+                const colors = ['#fecdd3', '#fda4af', '#fb7185', '#ffe4e6', '#ffffff'];
+                this.color = colors[Math.floor(Math.random() * colors.length)];
+                this.isBlossom = Math.random() > 0.6;
+            }
+
+            update() {
+                this.y += this.speedY;
+                this.x += Math.sin(this.y * 0.015) + this.speedX;
+                this.rotation += this.rotationSpeed;
+
+                if (this.y > height + 30) {
+                    this.reset();
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                ctx.globalAlpha = this.opacity;
+                ctx.fillStyle = this.color;
+
+                if (this.isBlossom) {
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.size * 0.4, 0, Math.PI * 2);
+                    ctx.ellipse(-this.size * 0.25, -this.size * 0.2, this.size * 0.25, this.size * 0.45, -0.2, 0, Math.PI * 2);
+                    ctx.ellipse(this.size * 0.25, -this.size * 0.2, this.size * 0.25, this.size * 0.45, 0.2, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.bezierCurveTo(this.size * 0.6, -this.size * 0.5, this.size * 0.6, -this.size * 1.2, 0, -this.size * 1.4);
+                    ctx.bezierCurveTo(-this.size * 0.6, -this.size * 1.2, -this.size * 0.6, -this.size * 0.5, 0, 0);
+                    ctx.fill();
+                }
+
+                ctx.restore();
+            }
+        }
+
+        const particleCount = Math.min(Math.floor(window.innerWidth / 25), 45);
+        const particles = Array.from({ length: particleCount }, () => new TulipParticle());
+
+        function animateTulips() {
+            ctx.clearRect(0, 0, width, height);
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+            requestAnimationFrame(animateTulips);
+        }
+        animateTulips();
+
+        // --- 4. YOUTUBE MUSIC PLAYER INTEGRATION (ใจเจ้าเอ๋ย - MABELZ PiXXiE) ---
+        let player = null;
+        let isPlaying = false;
+        let isMuted = false;
+
+        // Load YouTube iFrame API
+        const tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        const firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+        function onYouTubeIframeAPIReady() {
+            player = new YT.Player('youtube-player', {
+                height: '0',
+                width: '0',
+                videoId: 'MUKhdfvEUl4', // ใจเจ้าเอ๋ย - MABELZ PiXXiE
+                playerVars: {
+                    'autoplay': 1,
+                    'controls': 0,
+                    'loop': 1,
+                    'playlist': 'MUKhdfvEUl4',
+                    'playsinline': 1
+                },
+                events: {
+                    'onReady': onPlayerReady,
+                    'onStateChange': onPlayerStateChange
+                }
+            });
+        }
+
+        function onPlayerReady(event) {
+            // Attempt autoplay
+            event.target.setVolume(80);
+            event.target.playVideo();
+        }
+
+        function onPlayerStateChange(event) {
+            const playIcon = document.getElementById('play-icon');
+            const eqVisualizer = document.getElementById('music-eq');
+
+            if (event.data === YT.PlayerState.PLAYING) {
+                isPlaying = true;
+                playIcon.className = "fa-solid fa-pause text-xs";
+                eqVisualizer.classList.remove('is-paused');
+            } else {
+                isPlaying = false;
+                playIcon.className = "fa-solid fa-play text-xs ml-0.5";
+                eqVisualizer.classList.add('is-paused');
+            }
+        }
+
+        function togglePlayMusic() {
+            if (!player) return;
+            if (isPlaying) {
+                player.pauseVideo();
+            } else {
+                player.playVideo();
+            }
+        }
+
+        function toggleMuteMusic() {
+            if (!player) return;
+            const muteIcon = document.getElementById('mute-icon');
+            if (isMuted) {
+                player.unMute();
+                isMuted = false;
+                muteIcon.className = "fa-solid fa-volume-high text-xs";
+            } else {
+                player.mute();
+                isMuted = true;
+                muteIcon.className = "fa-solid fa-volume-xmark text-xs";
+            }
+        }
+
+        // Global User Interaction Fallback for Autoplay restrictions
+        let autoPlayTriggered = false;
+        document.body.addEventListener('click', () => {
+            if (!autoPlayTriggered && player && typeof player.playVideo === 'function') {
+                if (player.getPlayerState() !== YT.PlayerState.PLAYING) {
+                    player.playVideo();
+                }
+                autoPlayTriggered = true;
+            }
+        }, { once: true });
+    </script>
+</body>
+</html>
